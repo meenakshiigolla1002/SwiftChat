@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -19,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,11 +42,10 @@ private val DeepPurple = Color(0xFF4F32A1)
 private val Purple = Color(0xFF7754D8)
 private val Lavender = Color(0xFFEEE7FF)
 private val PageBackground = Color(0xFFF6F3FF)
+private val HeaderBackground = Color(0xFFF1EBFF)
 private val Ink = Color(0xFF25213B)
 private val Muted = Color(0xFF777188)
 private val White = Color.White
-
-private val HeaderBackground = Color(0xFFF1EBFF)
 
 private val SplashGradient = Brush.verticalGradient(
     colors = listOf(
@@ -77,24 +80,25 @@ class ChatThread(
         mutableStateListOf()
 )
 
-// Temporary in-memory data
-// Firebase and Room will be added later.
+// --------------------------------------------------
+// SHARED APPLICATION STATE
+// --------------------------------------------------
 
 class SwiftChatState {
 
+    // Settings preferences
+    var displayName by mutableStateOf("SwiftChat User")
+    var showMessagePreviews by mutableStateOf(true)
+    var vibrationEnabled by mutableStateOf(true)
+
+    // Temporary chat data
     val chats = mutableStateListOf(
         ChatThread(
             id = 1,
             name = "Alex",
             messages = mutableStateListOf(
-                ChatMessage(
-                    "Hey! How are you?",
-                    false
-                ),
-                ChatMessage(
-                    "I'm good, thanks!",
-                    true
-                )
+                ChatMessage("Hey! How are you?", false),
+                ChatMessage("I'm good, thanks!", true)
             )
         ),
 
@@ -122,6 +126,7 @@ class SwiftChatState {
         )
     )
 
+    // Send message
     fun sendMessage(chatId: Int, text: String) {
 
         if (text.isBlank()) return
@@ -136,6 +141,7 @@ class SwiftChatState {
             )
     }
 
+    // Create group
     fun createGroup(name: String): Int {
 
         val newId =
@@ -157,6 +163,14 @@ class SwiftChatState {
         )
 
         return newId
+    }
+
+    // Reset settings
+    fun resetSettings() {
+
+        displayName = "SwiftChat User"
+        showMessagePreviews = true
+        vibrationEnabled = true
     }
 }
 
@@ -206,6 +220,7 @@ fun SwiftChatApp(state: SwiftChatState) {
         startDestination = "splash"
     ) {
 
+        // Splash Screen
         composable("splash") {
 
             SplashScreen(
@@ -219,6 +234,7 @@ fun SwiftChatApp(state: SwiftChatState) {
             )
         }
 
+        // Home Screen
         composable("home") {
 
             HomeScreen(
@@ -238,6 +254,7 @@ fun SwiftChatApp(state: SwiftChatState) {
             )
         }
 
+        // Chat Screen
         composable(
             route = "chat/{chatId}",
             arguments = listOf(
@@ -259,6 +276,7 @@ fun SwiftChatApp(state: SwiftChatState) {
             )
         }
 
+        // Create Group
         composable("new_group") {
 
             CreateGroupScreen(
@@ -276,9 +294,12 @@ fun SwiftChatApp(state: SwiftChatState) {
             )
         }
 
+        // Settings
         composable("settings") {
 
             SettingsScreen(
+                state = state,
+
                 onBack = {
                     navController.popBackStack()
                 }
@@ -349,9 +370,10 @@ private fun ChatAvatar(
         modifier = Modifier
             .size(size.dp)
             .background(
-                color = Lavender,
-                shape = CircleShape
+                Lavender,
+                CircleShape
             ),
+
         contentAlignment = Alignment.Center
     ) {
 
@@ -399,8 +421,8 @@ fun SplashScreen(
                 modifier = Modifier
                     .size(108.dp)
                     .background(
-                        color = White.copy(alpha = 0.17f),
-                        shape = RoundedCornerShape(30.dp)
+                        White.copy(alpha = 0.17f),
+                        RoundedCornerShape(30.dp)
                     ),
 
                 contentAlignment = Alignment.Center
@@ -441,7 +463,7 @@ fun SplashScreen(
 }
 
 // --------------------------------------------------
-// SCREEN 2 - HOME / CHATS LIST
+// SCREEN 2 - HOME SCREEN
 // --------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -470,6 +492,7 @@ fun HomeScreen(
 
                 actions = {
                     TextButton(onClick = onSettings) {
+
                         Text(
                             text = "Settings ⚙",
                             color = DeepPurple
@@ -540,9 +563,8 @@ fun HomeScreen(
                         bottom = 105.dp
                     ),
 
-                    verticalArrangement = Arrangement.spacedBy(
-                        12.dp
-                    )
+                    verticalArrangement =
+                        Arrangement.spacedBy(12.dp)
                 ) {
 
                     items(
@@ -596,10 +618,18 @@ fun HomeScreen(
 
                                     Spacer(Modifier.height(5.dp))
 
+                                    // Functional message preview setting
                                     Text(
-                                        text = chat.messages
-                                            .lastOrNull()
-                                            ?.text ?: "No messages yet",
+                                        text = if (
+                                            state.showMessagePreviews
+                                        ) {
+                                            chat.messages
+                                                .lastOrNull()
+                                                ?.text
+                                                ?: "No messages yet"
+                                        } else {
+                                            "Message preview hidden"
+                                        },
 
                                         color = Muted,
                                         fontSize = 13.sp,
@@ -624,7 +654,6 @@ fun HomeScreen(
 
 // --------------------------------------------------
 // SCREEN 3 - CHAT SCREEN
-// FIXED HEADER SPACING AND STATUS BAR OVERLAP
 // --------------------------------------------------
 
 @Composable
@@ -644,7 +673,6 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-
             Text("Conversation not found")
         }
 
@@ -656,6 +684,8 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
+
+    val hapticFeedback = LocalHapticFeedback.current
 
     LaunchedEffect(chat.messages.size) {
 
@@ -670,7 +700,6 @@ fun ChatScreen(
     Scaffold(
         containerColor = Color.Transparent,
 
-        // FIX: The top bar now respects system insets.
         topBar = {
 
             Surface(
@@ -691,8 +720,6 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
 
-                    // Back button
-
                     TextButton(
                         onClick = onBack,
 
@@ -708,8 +735,6 @@ fun ChatScreen(
                         )
                     }
 
-                    // Contact avatar
-
                     ChatAvatar(
                         name = chat.name,
                         isGroup = chat.isGroup,
@@ -717,8 +742,6 @@ fun ChatScreen(
                     )
 
                     Spacer(Modifier.width(12.dp))
-
-                    // Contact name and subtitle
 
                     Column(
                         modifier = Modifier.weight(1f),
@@ -747,15 +770,12 @@ fun ChatScreen(
                             color = Muted,
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
                 }
             }
         },
-
-        // Message input area
 
         bottomBar = {
 
@@ -805,12 +825,23 @@ fun ChatScreen(
                     Button(
                         onClick = {
 
-                            state.sendMessage(
-                                chatId = chatId,
-                                text = message
-                            )
+                            if (message.isNotBlank()) {
 
-                            message = ""
+                                state.sendMessage(
+                                    chatId = chatId,
+                                    text = message
+                                )
+
+                                // Functional vibration preference
+                                if (state.vibrationEnabled) {
+
+                                    hapticFeedback.performHapticFeedback(
+                                        HapticFeedbackType.LongPress
+                                    )
+                                }
+
+                                message = ""
+                            }
                         },
 
                         enabled = message.isNotBlank(),
@@ -841,9 +872,8 @@ fun ChatScreen(
 
                 contentPadding = PaddingValues(16.dp),
 
-                verticalArrangement = Arrangement.spacedBy(
-                    12.dp
-                )
+                verticalArrangement =
+                    Arrangement.spacedBy(12.dp)
             ) {
 
                 items(chat.messages) { item ->
@@ -962,6 +992,7 @@ fun CreateGroupScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .imePadding()
+                    .verticalScroll(rememberScrollState())
                     .padding(
                         horizontal = 18.dp,
                         vertical = 20.dp
@@ -1031,9 +1062,8 @@ fun CreateGroupScreen(
                 Spacer(Modifier.height(12.dp))
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(
-                        9.dp
-                    )
+                    verticalArrangement =
+                        Arrangement.spacedBy(9.dp)
                 ) {
 
                     contacts.forEach { contact ->
@@ -1091,9 +1121,11 @@ fun CreateGroupScreen(
                                     onCheckedChange = { value ->
 
                                         if (value) {
+
                                             if (contact !in selected) {
                                                 selected.add(contact)
                                             }
+
                                         } else {
                                             selected.remove(contact)
                                         }
@@ -1142,8 +1174,27 @@ fun CreateGroupScreen(
 
 @Composable
 fun SettingsScreen(
+    state: SwiftChatState,
     onBack: () -> Unit
 ) {
+
+    var showEditProfile by remember {
+        mutableStateOf(false)
+    }
+
+    var showAbout by remember {
+        mutableStateOf(false)
+    }
+
+    var showResetConfirmation by remember {
+        mutableStateOf(false)
+    }
+
+    var editedName by remember {
+        mutableStateOf(state.displayName)
+    }
+
+    val hapticFeedback = LocalHapticFeedback.current
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -1162,12 +1213,18 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(18.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        horizontal = 18.dp,
+                        vertical = 20.dp
+                    ),
 
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                Spacer(Modifier.height(12.dp))
+                // ----------------------------------
+                // PROFILE SECTION
+                // ----------------------------------
 
                 Box(
                     modifier = Modifier
@@ -1181,7 +1238,10 @@ fun SettingsScreen(
                 ) {
 
                     Text(
-                        text = "U",
+                        text = state.displayName
+                            .take(1)
+                            .uppercase(),
+
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
                         color = DeepPurple
@@ -1191,23 +1251,52 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
 
                 Text(
-                    text = "SwiftChat User",
+                    text = state.displayName,
                     fontSize = 23.sp,
                     fontWeight = FontWeight.Bold,
                     color = Ink
                 )
 
+                Spacer(Modifier.height(4.dp))
+
                 Text(
-                    text = "Demo profile",
+                    text = "Your personal profile",
                     color = Muted,
                     fontSize = 14.sp
                 )
 
+                Spacer(Modifier.height(18.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        editedName = state.displayName
+                        showEditProfile = true
+                    },
+
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+
+                    Text("Edit Profile")
+                }
+
                 Spacer(Modifier.height(30.dp))
+
+                // ----------------------------------
+                // CHAT PREFERENCES
+                // ----------------------------------
+
+                Text(
+                    text = "Chat Preferences",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
+                )
+
+                Spacer(Modifier.height(12.dp))
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-
                     shape = RoundedCornerShape(22.dp),
 
                     colors = CardDefaults.cardColors(
@@ -1220,44 +1309,464 @@ fun SettingsScreen(
                 ) {
 
                     Column(
-                        modifier = Modifier.padding(20.dp)
+                        modifier = Modifier.padding(
+                            horizontal = 16.dp,
+                            vertical = 10.dp
+                        )
                     ) {
 
-                        Text(
-                            text = "About SwiftChat",
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Ink
+                        SettingsToggleRow(
+                            title = "Message Previews",
+                            description = "Show recent messages on the home screen",
+                            checked = state.showMessagePreviews,
+
+                            onCheckedChange = {
+                                state.showMessagePreviews = it
+                            }
                         )
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Text(
-                            text = "A lightweight messaging app for " +
-                                    "personal chats and small groups, " +
-                                    "built with Kotlin and Jetpack Compose.",
-
-                            color = Muted,
-                            fontSize = 14.sp,
-                            lineHeight = 22.sp
-                        )
-
-                        Spacer(Modifier.height(16.dp))
 
                         HorizontalDivider(
                             color = Lavender
                         )
 
-                        Spacer(Modifier.height(14.dp))
+                        SettingsToggleRow(
+                            title = "Vibration",
+                            description = "Enable haptic feedback in the app",
+                            checked = state.vibrationEnabled,
 
-                        Text(
-                            text = "Version 1.0 · Local prototype",
-                            color = DeepPurple,
-                            fontWeight = FontWeight.Medium
+                            onCheckedChange = {
+                                state.vibrationEnabled = it
+                            }
                         )
+
+                        if (state.vibrationEnabled) {
+
+                            TextButton(
+                                onClick = {
+
+                                    hapticFeedback.performHapticFeedback(
+                                        HapticFeedbackType.LongPress
+                                    )
+                                }
+                            ) {
+
+                                Text(
+                                    text = "Test Vibration",
+                                    color = DeepPurple
+                                )
+                            }
+                        }
                     }
                 }
+
+                Spacer(Modifier.height(28.dp))
+
+                // ----------------------------------
+                // APPLICATION OPTIONS
+                // ----------------------------------
+
+                Text(
+                    text = "Application",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+
+                    colors = CardDefaults.cardColors(
+                        containerColor = White
+                    ),
+
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+
+                        // About SwiftChat
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showAbout = true
+                                }
+                                .padding(vertical = 12.dp),
+
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+
+                                Text(
+                                    text = "About SwiftChat",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = Ink
+                                )
+
+                                Spacer(Modifier.height(4.dp))
+
+                                Text(
+                                    text = "App information and version",
+                                    color = Muted,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            Text(
+                                text = "›",
+                                fontSize = 26.sp,
+                                color = Purple
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = Lavender
+                        )
+
+                        // Reset Settings
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showResetConfirmation = true
+                                }
+                                .padding(vertical = 12.dp),
+
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+
+                                Text(
+                                    text = "Reset Settings",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = Ink
+                                )
+
+                                Spacer(Modifier.height(4.dp))
+
+                                Text(
+                                    text = "Restore default preferences",
+                                    color = Muted,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            Text(
+                                text = "›",
+                                fontSize = 26.sp,
+                                color = Purple
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(30.dp))
+
+                Text(
+                    text = "SwiftChat",
+                    color = DeepPurple,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "Version 1.0 • Local Prototype",
+                    color = Muted,
+                    fontSize = 12.sp
+                )
+
+                Spacer(Modifier.height(20.dp))
             }
         }
+    }
+
+    // --------------------------------------------------
+    // EDIT PROFILE DIALOG
+    // --------------------------------------------------
+
+    if (showEditProfile) {
+
+        AlertDialog(
+            onDismissRequest = {
+                showEditProfile = false
+            },
+
+            title = {
+                Text("Edit Profile")
+            },
+
+            text = {
+
+                Column {
+
+                    Text(
+                        text = "Change your display name.",
+                        color = Muted
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = editedName,
+
+                        onValueChange = {
+                            if (it.length <= 30) {
+                                editedName = it
+                            }
+                        },
+
+                        label = {
+                            Text("Display Name")
+                        },
+
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+            },
+
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+                        state.displayName = editedName.trim()
+                        showEditProfile = false
+                    },
+
+                    enabled = editedName.isNotBlank()
+                ) {
+
+                    Text("Save")
+                }
+            },
+
+            dismissButton = {
+
+                TextButton(
+                    onClick = {
+                        showEditProfile = false
+                    }
+                ) {
+
+                    Text("Cancel")
+                }
+            },
+
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // --------------------------------------------------
+    // ABOUT SWIFTCHAT DIALOG
+    // --------------------------------------------------
+
+    if (showAbout) {
+
+        AlertDialog(
+            onDismissRequest = {
+                showAbout = false
+            },
+
+            title = {
+                Text("About SwiftChat")
+            },
+
+            text = {
+
+                Column {
+
+                    Text(
+                        text = "SwiftChat",
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepPurple
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = "SwiftChat is a lightweight " +
+                                "messaging application designed " +
+                                "for personal conversations " +
+                                "and small group chats."
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = "Built With",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "Kotlin\n" +
+                                "Jetpack Compose\n" +
+                                "Material Design 3"
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = "Version: 1.0\n" +
+                                "Status: Local Prototype",
+
+                        color = Muted,
+                        fontSize = 13.sp
+                    )
+                }
+            },
+
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+                        showAbout = false
+                    }
+                ) {
+
+                    Text("Close")
+                }
+            },
+
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // --------------------------------------------------
+    // RESET SETTINGS CONFIRMATION
+    // --------------------------------------------------
+
+    if (showResetConfirmation) {
+
+        AlertDialog(
+            onDismissRequest = {
+                showResetConfirmation = false
+            },
+
+            title = {
+                Text("Reset Settings?")
+            },
+
+            text = {
+
+                Text(
+                    text = "This will restore your display " +
+                            "name and preferences to their " +
+                            "default values. Your conversations " +
+                            "will not be deleted."
+                )
+            },
+
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+
+                        state.resetSettings()
+
+                        showResetConfirmation = false
+                    }
+                ) {
+
+                    Text("Reset")
+                }
+            },
+
+            dismissButton = {
+
+                TextButton(
+                    onClick = {
+                        showResetConfirmation = false
+                    }
+                ) {
+
+                    Text("Cancel")
+                }
+            },
+
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+}
+
+// --------------------------------------------------
+// REUSABLE SETTINGS TOGGLE ROW
+// --------------------------------------------------
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                onCheckedChange(!checked)
+            }
+            .padding(vertical = 12.dp),
+
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Ink
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = description,
+                fontSize = 13.sp,
+                color = Muted,
+                lineHeight = 19.sp
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = White,
+                checkedTrackColor = Purple,
+                uncheckedTrackColor = Lavender,
+                uncheckedThumbColor = Muted
+            )
+        )
     }
 }
